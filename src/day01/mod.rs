@@ -1,4 +1,13 @@
-use std::iter::zip;
+use polars::prelude::*;
+
+fn input_to_lf(input: &str, sep: u8) -> LazyFrame {
+    let lf: LazyFrame = LazyCsvReader::new(input)
+        .with_has_header(false)
+        .with_separator(sep)
+        .finish()
+        .unwrap();
+    lf
+}
 
 fn input_to_lists(input: &str) -> (Vec<i32>, Vec<i32>) {
     let result: Vec<_> = input
@@ -14,15 +23,17 @@ fn input_to_lists(input: &str) -> (Vec<i32>, Vec<i32>) {
     (list0, list1)
 }
 
-pub fn part01(input_text: &str) -> i32 {
-    let (mut list0, mut list1) = input_to_lists(input_text);
-    list0.sort();
-    list1.sort();
-    let mut sum = 0;
-    for elem in zip(list0, list1) {
-        sum += i32::abs(elem.1 - elem.0);
-    }
-    sum
+pub fn part01(input_path: &str) -> DataFrame {
+    let lf = input_to_lf(input_path, b' ').drop(["column_2", "column_3"]);
+
+    lf.select([
+        col("column_1").sort(Default::default()).alias("list_0"),
+        col("column_4").sort(Default::default()).alias("list_1"),
+    ])
+    .select([(col("list_0") - col("list_1")).alias("diff")])
+    .select([col("diff").abs().sum().alias("diff_sum")])
+    .collect()
+    .unwrap()
 }
 
 pub fn part02(input_text: &str) -> i32 {
@@ -37,16 +48,30 @@ pub fn part02(input_text: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use polars::df;
+    #[test]
+    fn test_input_to_df() {
+        let expected = df![
+            "a" => &[3, 4, 2, 1, 3, 3],
+            "b" => &[4, 3, 5, 3 , 9, 3]
+        ];
+        assert_eq!(
+            expected.unwrap(),
+            input_to_lf("./src/day01/test", b' ')
+                .drop(["column_2", "column_3"])
+                .collect()
+                .unwrap()
+        );
+    }
 
     #[test]
     fn test_part_01() {
-        let test01 = include_str!("./test");
-        assert_eq!(11, part01(test01));
+        let expected = df!["diff_sum" => [11]];
+        assert_eq!(expected.unwrap(), part01("./src/day01/test"));
     }
 
     #[test]
     fn test_part_02() {
-        let test02 = include_str!("./test");
-        assert_eq!(31, part02(test02));
+        assert_eq!(31, part02(include_str!("./test")));
     }
 }
